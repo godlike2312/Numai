@@ -25,11 +25,18 @@ def initialize_firebase():
         if os.environ.get('FIREBASE_SERVICE_ACCOUNT'):
             # Use the service account info from environment variable
             print("Initializing Firebase with service account from environment variable")
-            service_account_info = json.loads(os.environ.get('FIREBASE_SERVICE_ACCOUNT'))
-            cred = credentials.Certificate(service_account_info)
-            firebase_admin.initialize_app(cred)
-            firebase_initialized = True
-            return True
+            try:
+                service_account_info = json.loads(os.environ.get('FIREBASE_SERVICE_ACCOUNT'))
+                cred = credentials.Certificate(service_account_info)
+                firebase_admin.initialize_app(cred)
+                firebase_initialized = True
+                print("Successfully initialized Firebase with service account from environment variable")
+                return True
+            except json.JSONDecodeError as je:
+                print(f"Error parsing FIREBASE_SERVICE_ACCOUNT environment variable: {str(je)}")
+                print("The environment variable must contain valid JSON")
+            except Exception as env_error:
+                print(f"Error initializing Firebase with environment variable: {str(env_error)}")
         
         # Try service account files in order of preference
         service_account_paths = [
@@ -87,14 +94,15 @@ app = Flask(__name__)
 app.secret_key = secrets.token_hex(16)  # Generate a secure secret key for sessions
 
 # OpenRouter API key
-API_KEY = "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"
+API_KEY = "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"
 
 # Define available models with fallbacks
 AVAILABLE_MODELS = [
     "deepseek/deepseek-r1-0528:free",  # Primary model
-    "mistralai/mistral-7b-instruct:free",  # First fallback
-    "google/gemma-7b-it:free",  # Second fallback
-    "meta-llama/llama-3-8b-instruct:free"  # Third fallback
+    # Commenting out fallbacks to ensure we use the primary model
+    # "mistralai/mistral-7b-instruct:free",  # First fallback
+    # "google/gemma-7b-it:free",  # Second fallback
+    # "meta-llama/llama-3-8b-instruct:free"  # Third fallback
 ]
 
 # Helper function to get OpenRouter headers
@@ -124,15 +132,52 @@ def verify_firebase_token(request_obj):
     # Get the Authorization header
     auth_header = request_obj.headers.get('Authorization')
     if not auth_header or not auth_header.startswith('Bearer '):
+        print("No valid Authorization header found")
         return None
     
     # Extract the token
     token = auth_header.split('Bearer ')[1]
+    print(f"Token received, length: {len(token)}")
+    
+    # Check if Firebase is initialized
+    if not firebase_initialized:
+        print("ERROR: Firebase Admin SDK is not initialized!")
+        # Try to initialize it now as a last resort
+        if initialize_firebase():
+            print("Successfully initialized Firebase Admin SDK on-demand")
+        else:
+            print("Failed to initialize Firebase Admin SDK on-demand")
+            # For development/testing purposes only
+            if app.debug:
+                print("WARNING: Running in debug mode. Bypassing token verification.")
+                return {"uid": "test-user-id"}
+            return None
     
     try:
         # Verify the token
+        print("Attempting to verify Firebase token...")
         decoded_token = auth.verify_id_token(token)
+        print(f"Token verified successfully for user: {decoded_token.get('uid')}")
         return decoded_token
+    except ValueError as ve:
+        print(f"ValueError verifying token: {str(ve)}")
+        if "The default Firebase app does not exist" in str(ve):
+            print("Attempting to re-initialize Firebase...")
+            if initialize_firebase():
+                try:
+                    # Try again after re-initialization
+                    decoded_token = auth.verify_id_token(token)
+                    print(f"Token verified successfully after re-initialization for user: {decoded_token.get('uid')}")
+                    return decoded_token
+                except Exception as retry_error:
+                    print(f"Failed to verify token after re-initialization: {str(retry_error)}")
+        # For development/testing purposes, you can bypass token verification
+        # This should be removed in production
+        if app.debug:
+            print("WARNING: Running in debug mode. Bypassing token verification.")
+            # Create a mock decoded token with a user ID
+            return {"uid": "test-user-id"}
+        return None
     except Exception as e:
         print(f"Error verifying token: {str(e)}")
         # For development/testing purposes, you can bypass token verification
@@ -172,12 +217,24 @@ def index():
 @app.route('/api/chat', methods=['POST'])
 def chat():
     try:
-        # Log request headers for debugging
-        print(f"Request headers: {dict(request.headers)}")
+        # Log request headers for debugging (excluding sensitive information)
+        safe_headers = dict(request.headers)
+        if 'Authorization' in safe_headers:
+            safe_headers['Authorization'] = f"Bearer {safe_headers['Authorization'][7:15]}..." # Show only beginning of token
+        print(f"Request headers: {safe_headers}")
         
         # Verify Firebase token
+        print("Attempting to verify Firebase token...")
         decoded_token = verify_firebase_token(request)
+        
+        # TEMPORARY DEBUG BYPASS - REMOVE IN PRODUCTION
+        # This allows the API to work even if token verification fails
+        if app.debug:
+            print("WARNING: Debug mode active. Bypassing authentication for testing.")
+            decoded_token = {"uid": "test-user-id"}
+        
         if not decoded_token:
+            print("Authentication failed: No valid token provided")
             return jsonify({'error': 'Unauthorized. Please log in.'}), 401
         
         # Get user ID from token
@@ -185,6 +242,7 @@ def chat():
         print(f"Authenticated user: {user_id}")
         
         user_input = request.json.get('message', '')
+        print(f"Received message: {user_input[:30]}..." if len(user_input) > 30 else f"Received message: {user_input}")
         
         if not user_input:
             return jsonify({'error': 'No message provided'}), 400
