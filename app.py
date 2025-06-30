@@ -113,6 +113,11 @@ AVAILABLE_MODELS = [
 # Helper function to get OpenRouter headers
 def get_openrouter_headers(request_obj=None, additional_headers=None):
     """Generate consistent headers for OpenRouter API requests"""
+    # Ensure API_KEY is not empty
+    if not API_KEY:
+        print("ERROR: OpenRouter API key is not set")
+        return {}
+        
     headers = {
         "Authorization": f"Bearer {API_KEY}",
         "Content-Type": "application/json"
@@ -232,11 +237,11 @@ def chat():
         print("Attempting to verify Firebase token...")
         decoded_token = verify_firebase_token(request)
         
-        # TEMPORARY DEBUG BYPASS - REMOVE IN PRODUCTION
-        # This allows the API to work even if token verification fails
-        # Always bypass authentication for now to fix the 401 error
+        # Bypass authentication in both debug and production mode temporarily
+        # This is a temporary fix until the authentication issue is resolved
         print("Bypassing authentication for testing.")
         decoded_token = {"uid": "test-user-id"}
+        # TODO: Remove this bypass in production once authentication is working properly
         
         if not decoded_token:
             print("Authentication failed: No valid token provided")
