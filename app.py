@@ -4,6 +4,7 @@ import json
 import os
 import secrets
 import time
+import traceback
 
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(16)  # Generate a secure secret key for sessions
@@ -18,6 +19,27 @@ AVAILABLE_MODELS = [
     "google/gemma-7b-it:free",  # Second fallback
     "meta-llama/llama-3-8b-instruct:free"  # Third fallback
 ]
+
+# Helper function to get OpenRouter headers
+def get_openrouter_headers(request_obj=None, additional_headers=None):
+    """Generate consistent headers for OpenRouter API requests"""
+    headers = {
+        "Authorization": f"Bearer {API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    # Add HTTP-Referer if request object is provided
+    if request_obj:
+        origin = request_obj.headers.get('Origin')
+        referer = request_obj.headers.get('Referer')
+        headers["HTTP-Referer"] = origin or referer or "https://numai.onrender.com"
+        headers["X-Title"] = "NumAI"
+    
+    # Add any additional headers
+    if additional_headers:
+        headers.update(additional_headers)
+    
+    return headers
 
 # Route for the login page
 @app.route('/login')
@@ -48,6 +70,9 @@ def index():
 @app.route('/api/chat', methods=['POST'])
 def chat():
     try:
+        # Log request headers for debugging
+        print(f"Request headers: {dict(request.headers)}")
+        
         user_input = request.json.get('message', '')
         
         if not user_input:
@@ -57,10 +82,7 @@ def chat():
         try:
             key_status_response = requests.get(
                 url="https://openrouter.ai/api/v1/auth/key",
-                headers={
-                    "Authorization": f"Bearer {API_KEY}",
-                    "Content-Type": "application/json"
-                }
+                headers=get_openrouter_headers(request)
             )
             
             if key_status_response.status_code != 200:
@@ -88,12 +110,7 @@ def chat():
                 # Call OpenRouter API with the current model
                 response = requests.post(
                     url="https://openrouter.ai/api/v1/chat/completions",
-                    headers={
-                        "Authorization": f"Bearer {API_KEY}",
-                        "Content-Type": "application/json",
-                        "HTTP-Referer": "https://numai.onrender.com",  # Replace with your actual site URL
-                        "X-Title": "NumAI",  # Replace with your actual site name
-                    },
+                    headers=get_openrouter_headers(request),
                     data=json.dumps({
                         "model": model,
                         "messages": [
@@ -169,20 +186,33 @@ def chat():
             return jsonify({'error': f'All models failed: {str(last_error)}'}), 500
     
     except Exception as e:
-        print(f"Unexpected Error outside model loop: {str(e)}")
-        return jsonify({'error': f'An unexpected error occurred: {str(e)}'}), 500
+        error_details = traceback.format_exc()
+        print(f"Unexpected Error outside model loop: {str(e)}\n{error_details}")
+        
+        # Provide a more user-friendly error message
+        error_message = "We're experiencing technical difficulties with our AI service. Please try again later."
+        
+        # Include more details in development environment
+        if app.debug:
+            error_message += f" Error details: {str(e)}"
+        
+        return jsonify({
+            'error': error_message,
+            'status': 'error',
+            'retry_recommended': True
+        }), 500
 
 @app.route('/api/status', methods=['GET'])
 def api_status():
     """Endpoint to check the status of the OpenRouter API and available models"""
     try:
+        # Log request headers for debugging
+        print(f"Status endpoint headers: {dict(request.headers)}")
+        
         # Check API key status
         key_status_response = requests.get(
             url="https://openrouter.ai/api/v1/auth/key",
-            headers={
-                "Authorization": f"Bearer {API_KEY}",
-                "Content-Type": "application/json"
-            }
+            headers=get_openrouter_headers(request)
         )
         
         if key_status_response.status_code != 200:
@@ -197,10 +227,7 @@ def api_status():
         # Check models availability
         models_response = requests.get(
             url="https://openrouter.ai/api/v1/models",
-            headers={
-                "Authorization": f"Bearer {API_KEY}",
-                "Content-Type": "application/json"
-            }
+            headers=get_openrouter_headers(request)
         )
         
         models_data = models_response.json() if models_response.status_code == 200 else {'error': 'Failed to fetch models'}
@@ -227,9 +254,20 @@ def api_status():
         })
     
     except Exception as e:
+        error_details = traceback.format_exc()
+        print(f"Error in API status endpoint: {str(e)}\n{error_details}")
+        
+        # Provide a more user-friendly error message
+        error_message = "Unable to retrieve API status information. Please try again later."
+        
+        # Include more details in development environment
+        if app.debug:
+            error_message += f" Error details: {str(e)}"
+        
         return jsonify({
             'status': 'error',
-            'message': f'Error checking API status: {str(e)}'
+            'message': error_message,
+            'server_time': time.strftime('%Y-%m-%d %H:%M:%S')
         }), 500
 
 if __name__ == '__main__':
