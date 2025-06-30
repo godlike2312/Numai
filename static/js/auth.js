@@ -113,7 +113,7 @@ auth.onAuthStateChanged(user => {
     } else {
         // User is signed out, redirect to login page if on protected pages
         const currentPath = window.location.pathname;
-        if (currentPath !== '/login' && currentPath !== '/register' && currentPath !== '/reset-password') {
+        if (currentPath !== '/login' && currentPath !== '/register' && currentPath !== '/reset-password' && currentPath !== '/status') {
             window.location.href = '/login';
         }
     }
