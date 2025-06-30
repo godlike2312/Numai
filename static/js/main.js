@@ -371,11 +371,24 @@ async function sendMessage(message) {
         const loadingIndicator = addLoadingIndicator();
         
         // Send the message to the API
+        // Get the current user's ID token for authentication
+        let headers = {
+            'Content-Type': 'application/json'
+        };
+        
+        // Add Firebase auth token if user is logged in
+        if (firebase.auth().currentUser) {
+            try {
+                const token = await firebase.auth().currentUser.getIdToken(true);
+                headers['Authorization'] = `Bearer ${token}`;
+            } catch (tokenError) {
+                console.error('Error getting auth token:', tokenError);
+            }
+        }
+        
         const response = await fetch('/api/chat', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: headers,
             body: JSON.stringify({ message }),
             signal: signal
         });

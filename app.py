@@ -5,9 +5,20 @@ import os
 import secrets
 import time
 import traceback
+import firebase_admin
+from firebase_admin import credentials, auth
 
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(16)  # Generate a secure secret key for sessions
+
+# Initialize Firebase Admin SDK
+# Since we don't have the service account file, we'll use the application default credentials
+# In production, you should use a service account file
+try:
+    firebase_admin.initialize_app()
+except ValueError:
+    # App already initialized
+    pass
 
 # OpenRouter API key
 API_KEY = "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"
@@ -41,6 +52,25 @@ def get_openrouter_headers(request_obj=None, additional_headers=None):
     
     return headers
 
+# Helper function to verify Firebase ID token
+def verify_firebase_token(request_obj):
+    """Verify Firebase ID token from Authorization header"""
+    # Get the Authorization header
+    auth_header = request_obj.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return None
+    
+    # Extract the token
+    token = auth_header.split('Bearer ')[1]
+    
+    try:
+        # Verify the token
+        decoded_token = auth.verify_id_token(token)
+        return decoded_token
+    except Exception as e:
+        print(f"Error verifying token: {str(e)}")
+        return None
+
 # Route for the login page
 @app.route('/login')
 def login():
@@ -72,6 +102,15 @@ def chat():
     try:
         # Log request headers for debugging
         print(f"Request headers: {dict(request.headers)}")
+        
+        # Verify Firebase token
+        decoded_token = verify_firebase_token(request)
+        if not decoded_token:
+            return jsonify({'error': 'Unauthorized. Please log in.'}), 401
+        
+        # Get user ID from token
+        user_id = decoded_token.get('uid')
+        print(f"Authenticated user: {user_id}")
         
         user_input = request.json.get('message', '')
         
