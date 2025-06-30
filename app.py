@@ -12,27 +12,36 @@ app = Flask(__name__)
 app.secret_key = secrets.token_hex(16)  # Generate a secure secret key for sessions
 
 # Initialize Firebase Admin SDK
-# Use the service account file for authentication
+# Try to use environment variables first, then fall back to service account files
 try:
-    # First try the service account file in the static/js folder
-    cred = credentials.Certificate('static/js/bot-ai-ind-firebase-adminsdk-fbsvc-108e169d30.json')
-    firebase_admin.initialize_app(cred)
+    # Check if FIREBASE_SERVICE_ACCOUNT is set as an environment variable
+    if os.environ.get('FIREBASE_SERVICE_ACCOUNT'):
+        # Use the service account info from environment variable
+        service_account_info = json.loads(os.environ.get('FIREBASE_SERVICE_ACCOUNT'))
+        cred = credentials.Certificate(service_account_info)
+        firebase_admin.initialize_app(cred)
+    else:
+        # Try service account files in order of preference
+        try:
+            # First try the service account file in the static/js folder
+            cred = credentials.Certificate('static/js/bot-ai-ind-firebase-adminsdk-fbsvc-108e169d30.json')
+            firebase_admin.initialize_app(cred)
+        except FileNotFoundError:
+            # Then try the service account file in the root directory
+            try:
+                cred = credentials.Certificate('firebase-service-account.json')
+                firebase_admin.initialize_app(cred)
+            except FileNotFoundError:
+                print("Firebase service account files not found. Using application default credentials.")
+                try:
+                    firebase_admin.initialize_app()
+                except Exception as e:
+                    print(f"Error initializing Firebase Admin SDK: {str(e)}")
+                    # Continue without Firebase Admin SDK
+                    pass
 except ValueError:
     # App already initialized
     pass
-except FileNotFoundError:
-    # Try the service account file in the root directory
-    try:
-        cred = credentials.Certificate('firebase-service-account.json')
-        firebase_admin.initialize_app(cred)
-    except FileNotFoundError:
-        print("Firebase service account files not found. Using application default credentials.")
-        try:
-            firebase_admin.initialize_app()
-        except Exception as e:
-            print(f"Error initializing Firebase Admin SDK: {str(e)}")
-            # Continue without Firebase Admin SDK
-            pass
 
 # OpenRouter API key
 API_KEY = "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"
