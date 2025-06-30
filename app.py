@@ -12,13 +12,27 @@ app = Flask(__name__)
 app.secret_key = secrets.token_hex(16)  # Generate a secure secret key for sessions
 
 # Initialize Firebase Admin SDK
-# Since we don't have the service account file, we'll use the application default credentials
-# In production, you should use a service account file
+# Use the service account file for authentication
 try:
-    firebase_admin.initialize_app()
+    # First try the service account file in the static/js folder
+    cred = credentials.Certificate('static/js/bot-ai-ind-firebase-adminsdk-fbsvc-108e169d30.json')
+    firebase_admin.initialize_app(cred)
 except ValueError:
     # App already initialized
     pass
+except FileNotFoundError:
+    # Try the service account file in the root directory
+    try:
+        cred = credentials.Certificate('firebase-service-account.json')
+        firebase_admin.initialize_app(cred)
+    except FileNotFoundError:
+        print("Firebase service account files not found. Using application default credentials.")
+        try:
+            firebase_admin.initialize_app()
+        except Exception as e:
+            print(f"Error initializing Firebase Admin SDK: {str(e)}")
+            # Continue without Firebase Admin SDK
+            pass
 
 # OpenRouter API key
 API_KEY = "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"
@@ -69,6 +83,12 @@ def verify_firebase_token(request_obj):
         return decoded_token
     except Exception as e:
         print(f"Error verifying token: {str(e)}")
+        # For development/testing purposes, you can bypass token verification
+        # This should be removed in production
+        if app.debug:
+            print("WARNING: Running in debug mode. Bypassing token verification.")
+            # Create a mock decoded token with a user ID
+            return {"uid": "test-user-id"}
         return None
 
 # Route for the login page
