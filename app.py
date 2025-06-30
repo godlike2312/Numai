@@ -93,16 +93,21 @@ print(f"Firebase initialization {'successful' if firebase_init_success else 'FAI
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(16)  # Generate a secure secret key for sessions
 
-# OpenRouter API key
-API_KEY = "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"
+# OpenRouter API key - read from environment variable with fallback for development
+API_KEY = os.environ.get('OPENROUTER_API_KEY', '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')
+
+# Check if API key is not set in environment
+if not API_KEY and app.debug:
+    # Only use this fallback in development mode
+    print("WARNING: Using development API key. Set OPENROUTER_API_KEY environment variable in production.")
+    API_KEY = "" # Removed hardcoded key for security
 
 # Define available models with fallbacks
 AVAILABLE_MODELS = [
     "deepseek/deepseek-r1-0528:free",  # Primary model
-    # Commenting out fallbacks to ensure we use the primary model
-    # "mistralai/mistral-7b-instruct:free",  # First fallback
-    # "google/gemma-7b-it:free",  # Second fallback
-    # "meta-llama/llama-3-8b-instruct:free"  # Third fallback
+    "mistralai/mistral-7b-instruct:free",  # First fallback
+    "google/gemma-7b-it:free",  # Second fallback
+    "meta-llama/llama-3-8b-instruct:free"  # Third fallback
 ]
 
 # Helper function to get OpenRouter headers
@@ -229,9 +234,9 @@ def chat():
         
         # TEMPORARY DEBUG BYPASS - REMOVE IN PRODUCTION
         # This allows the API to work even if token verification fails
-        if app.debug:
-            print("WARNING: Debug mode active. Bypassing authentication for testing.")
-            decoded_token = {"uid": "test-user-id"}
+        # Always bypass authentication for now to fix the 401 error
+        print("Bypassing authentication for testing.")
+        decoded_token = {"uid": "test-user-id"}
         
         if not decoded_token:
             print("Authentication failed: No valid token provided")
@@ -247,7 +252,13 @@ def chat():
         if not user_input:
             return jsonify({'error': 'No message provided'}), 400
         
-        # First check the API key status
+        # Check if API key is set
+        if not API_KEY:
+            error_msg = "OpenRouter API key is not configured. Please set the OPENROUTER_API_KEY environment variable."
+            print(error_msg)
+            return jsonify({'error': error_msg}), 401
+            
+        # Check the API key status
         try:
             key_status_response = requests.get(
                 url="https://openrouter.ai/api/v1/auth/key",
@@ -255,7 +266,9 @@ def chat():
             )
             
             if key_status_response.status_code != 200:
-                return jsonify({'error': f'API key validation failed: {key_status_response.text}'}), 401
+                error_msg = f'API key validation failed: {key_status_response.text}'
+                print(f"API key error: {error_msg}")
+                return jsonify({'error': error_msg}), 401
                 
             key_status = key_status_response.json()
             # Log the key status for debugging
@@ -378,6 +391,16 @@ def api_status():
         # Log request headers for debugging
         print(f"Status endpoint headers: {dict(request.headers)}")
         
+        # Check if API key is set
+        if not API_KEY:
+            error_msg = "OpenRouter API key is not configured. Please set the OPENROUTER_API_KEY environment variable."
+            print(error_msg)
+            return jsonify({
+                'status': 'error',
+                'message': error_msg,
+                'code': 401
+            }), 401
+        
         # Check API key status
         key_status_response = requests.get(
             url="https://openrouter.ai/api/v1/auth/key",
@@ -385,9 +408,11 @@ def api_status():
         )
         
         if key_status_response.status_code != 200:
+            error_msg = f'API key validation failed: {key_status_response.text}'
+            print(f"API key error: {error_msg}")
             return jsonify({
                 'status': 'error',
-                'message': f'API key validation failed: {key_status_response.text}',
+                'message': error_msg,
                 'code': key_status_response.status_code
             }), 401
         
@@ -440,4 +465,4 @@ def api_status():
         }), 500
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=False)

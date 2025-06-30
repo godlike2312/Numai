@@ -397,7 +397,12 @@ async function sendMessage(message) {
         removeLoadingIndicator(loadingIndicator);
         
         if (!response.ok) {
-            throw new Error('Failed to get response from API');
+            // Handle specific error status codes
+            if (response.status === 401) {
+                throw new Error('Authentication error: API key may be missing or invalid');
+            } else {
+                throw new Error('Failed to get response from API');
+            }
         }
         
         const data = await response.json();
@@ -633,7 +638,12 @@ async function sendMessage(message) {
         console.error('Error:', error);
         // Don't show abort error messages to the user
         if (error.name !== 'AbortError') {
-            addMessage(`An error occurred: ${error.message}`, 'system');
+            // Check for specific error messages
+            if (error.message.includes('API key')) {
+                addMessage('Error: The API key is missing or invalid. Please check the server configuration.', 'system');
+            } else {
+                addMessage(`An error occurred: ${error.message}`, 'system');
+            }
         }
         // Reset UI in case of error
         userInput.disabled = false;

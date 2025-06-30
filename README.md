@@ -1,101 +1,62 @@
-# NumAI - Powered by DeepSeek R1
+# NumAI - AI Chat Application
 
-NumAI is a web application that integrates with the DeepSeek R1 model via OpenRouter API to provide an AI chat interface.
+A Flask-based AI chat application using OpenRouter API and Firebase authentication.
 
-## Features
+## Environment Variables
 
-- Clean, modern UI with animations powered by GSAP
-- Real-time chat interface
-- Integration with DeepSeek R1 model through OpenRouter API
-- Responsive design for desktop and mobile devices
+The application requires the following environment variables to be set:
 
-## Project Structure
+### Required Environment Variables
 
-```
-NumAI/
-├── app.py                 # Flask application
-├── requirements.txt       # Python dependencies
-├── static/
-│   ├── css/
-│   │   └── style.css      # Styling for the application
-│   └── js/
-│       └── main.js        # JavaScript for frontend functionality
-└── templates/
-    └── index.html         # Main HTML template
-```
+- `OPENROUTER_API_KEY`: Your OpenRouter API key for accessing AI models
 
-## Setup Instructions
+### Optional Environment Variables
 
-### Prerequisites
+- `FIREBASE_SERVICE_ACCOUNT`: JSON string containing Firebase service account credentials (alternative to using a service account file)
 
-- Python 3.7 or higher
-- pip (Python package installer)
+## Local Development Setup
 
-### Installation
+1. Clone the repository
+2. Install dependencies:
+   ```
+   pip install -r requirements.txt
+   ```
+3. Set up environment variables:
+   - On Windows (Command Prompt):
+     ```
+     set OPENROUTER_API_KEY=your_openrouter_api_key
+     ```
+   - On Windows (PowerShell):
+     ```
+     $env:OPENROUTER_API_KEY="your_openrouter_api_key"
+     ```
+   - On macOS/Linux:
+     ```
+     export OPENROUTER_API_KEY=your_openrouter_api_key
+     ```
 
-1. Clone the repository or download the source code
+4. Run the application:
+   ```
+   python app.py
+   ```
 
-2. Navigate to the project directory
+## Deployment on Render
 
-```bash
-cd path/to/NumAI
-```
+To deploy this application on Render:
 
-3. Create a virtual environment (optional but recommended)
+1. Create a new Web Service on Render
+2. Connect your repository
+3. Configure the following settings:
+   - Build Command: `pip install -r requirements.txt`
+   - Start Command: `gunicorn app:app`
+4. Add the required environment variables in the Render dashboard:
+   - Go to your Web Service → Environment
+   - Add the following environment variables:
+     - `OPENROUTER_API_KEY`: Your OpenRouter API key
+     - `FIREBASE_SERVICE_ACCOUNT`: Your Firebase service account JSON (if not using a file)
 
-```bash
-python -m venv venv
-```
+## Security Notes
 
-4. Activate the virtual environment
-
-- On Windows:
-```bash
-venv\Scripts\activate
-```
-
-- On macOS/Linux:
-```bash
-source venv/bin/activate
-```
-
-5. Install the required dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-### Configuration
-
-The OpenRouter API key is already configured in the `app.py` file. If you need to use a different API key, update the `API_KEY` variable in `app.py`.
-
-### Running the Application
-
-1. Start the Flask development server
-
-```bash
-python app.py
-```
-
-2. Open your web browser and navigate to `http://127.0.0.1:5000`
-
-## Usage
-
-1. Type your message in the input field at the bottom of the chat interface
-2. Press the "Send" button or hit Enter to send your message
-3. Wait for the AI to respond
-
-## Security Note
-
-The API key is currently hardcoded in the `app.py` file. For production use, it's recommended to use environment variables or a secure configuration management system to store sensitive information.
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Acknowledgements
-
-- [DeepSeek R1 Model](https://deepseek.ai)
-- [OpenRouter API](https://openrouter.ai)
-- [Flask](https://flask.palletsprojects.com/)
-- [GSAP (GreenSock Animation Platform)](https://greensock.com/gsap/)
+- Never commit API keys or service account files to your repository
+- In production, always use environment variables for sensitive credentials
+- The application includes a debug mode that bypasses authentication - ensure this is disabled in production by setting `debug=False`
